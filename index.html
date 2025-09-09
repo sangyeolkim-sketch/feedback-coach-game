@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>맞춤형 피드백 코칭 게임</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+        }
+        /* 간단한 화면 전환 효과 */
+        .screen {
+            transition: opacity 0.5s ease-in-out, transform 0.5s ease-in-out;
+        }
+        .screen.hidden {
+            opacity: 0;
+            transform: scale(0.95);
+            pointer-events: none;
+            position: absolute;
+        }
+        .btn {
+            transition: all 0.2s ease-in-out;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        .quadrant {
+            transition: all 0.3s ease-in-out;
+            border-width: 4px;
+            border-style: solid;
+        }
+        .quadrant:hover {
+            transform: scale(1.05);
+            z-index: 10;
+        }
+        .selected-quadrant {
+            transform: scale(1.05);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.2);
+            z-index: 5;
+        }
+        .progress-bar-inner {
+            transition: width 0.3s ease-in-out;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800 flex items-center justify-center min-h-screen p-4">
+
+    <div id="app" class="w-full max-w-4xl mx-auto bg-white rounded-2xl shadow-xl p-6 sm:p-10 relative overflow-hidden">
+
+        <!-- 시작 화면 -->
+        <div id="start-screen" class="screen text-center">
+            <h1 class="text-3xl sm:text-4xl font-bold text-gray-800 mb-4">팀원을 위한 맞춤형 피드백 찾기</h1>
+            <p class="text-gray-600 mb-8 max-w-2xl mx-auto">
+                팀원의 성격 유형(DISC)과 현재 상태(능력/태도)를 진단하여 가장 효과적인 피드백 방법을 알아보세요.
+                <br>총 2단계의 간단한 진단을 통해 맞춤형 코칭 전략을 얻을 수 있습니다.
+            </p>
+            <button onclick="startGame()" class="btn bg-indigo-600 text-white font-bold py-3 px-8 rounded-lg text-lg hover:bg-indigo-700">
+                진단 시작하기
+            </button>
+        </div>
+
+        <!-- DISC 퀴즈 화면 -->
+        <div id="disc-quiz-screen" class="screen hidden w-full">
+            <div class="text-center mb-8">
+                <h2 class="text-2xl sm:text-3xl font-bold">STEP 1: 팀원의 행동 유형 진단 (DISC)</h2>
+                <p class="text-gray-600 mt-2">각 상황에서 팀원이 가장 먼저 보일 것 같은 반응을 선택해주세요.</p>
+            </div>
+            
+            <!-- 진행 상태 바 -->
+            <div class="w-full bg-gray-200 rounded-full h-2.5 mb-6">
+                <div id="progress-bar" class="bg-indigo-600 h-2.5 rounded-full progress-bar-inner" style="width: 0%"></div>
+            </div>
+
+            <div id="quiz-container">
+                <!-- 질문이 여기에 동적으로 삽입됩니다. -->
+            </div>
+            
+            <div class="mt-8 text-center">
+                 <button id="next-question-btn" onclick="nextQuestion()" class="btn bg-gray-300 text-gray-500 font-bold py-2 px-6 rounded-lg cursor-not-allowed" disabled>다음</button>
+            </div>
+        </div>
+
+        <!-- 능력/태도 매트릭스 화면 -->
+        <div id="matrix-screen" class="screen hidden w-full">
+            <div class="text-center mb-8">
+                <h2 class="text-2xl sm:text-3xl font-bold">STEP 2: 팀원의 현재 상태 진단</h2>
+                <p class="text-gray-600 mt-2">팀원의 현재 능력과 태도를 가장 잘 나타내는 영역을 선택해주세요.</p>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-1 sm:gap-2 text-white text-center font-bold relative">
+                <!-- 매트릭스 축 -->
+                <div class="absolute -left-16 top-1/2 -translate-y-1/2 -rotate-90 text-gray-500 font-semibold hidden sm:block">태도</div>
+                <div class="absolute -bottom-10 left-1/2 -translate-x-1/2 text-gray-500 font-semibold hidden sm:block">능력</div>
+                <div class="absolute -left-5 top-1/4 -translate-y-1/2 text-gray-500 text-sm hidden sm:block">높음</div>
+                <div class="absolute -left-5 bottom-1/4 translate-y-1/2 text-gray-500 text-sm hidden sm:block">낮음</div>
+                <div class="absolute -bottom-5 left-1/4 -translate-x-1/2 text-gray-500 text-sm hidden sm:block">낮음</div>
+                <div class="absolute -bottom-5 right-1/4 translate-x-1/2 text-gray-500 text-sm hidden sm:block">높음</div>
+
+                <div id="quadrant-problem" onclick="selectQuadrant('problem')" class="quadrant bg-red-500 p-6 sm:p-10 rounded-tl-lg border-red-500 cursor-pointer">
+                    <h3 class="text-xl sm:text-2xl">잠재적 문제</h3>
+                    <p class="font-normal text-sm sm:text-base mt-2">높은 능력 & 낮은 태도</p>
+                </div>
+                <div id="quadrant-star" onclick="selectQuadrant('star')" class="quadrant bg-green-500 p-6 sm:p-10 rounded-tr-lg border-green-500 cursor-pointer">
+                    <h3 class="text-xl sm:text-2xl">스타 플레이어</h3>
+                    <p class="font-normal text-sm sm:text-base mt-2">높은 능력 & 높은 태도</p>
+                </div>
+                <div id="quadrant-urgent" onclick="selectQuadrant('urgent')" class="quadrant bg-blue-500 p-6 sm:p-10 rounded-bl-lg border-blue-500 cursor-pointer">
+                    <h3 class="text-xl sm:text-2xl">개선 시급</h3>
+                    <p class="font-normal text-sm sm:text-base mt-2">낮은 능력 & 낮은 태도</p>
+                </div>
+                <div id="quadrant-trainee" onclick="selectQuadrant('trainee')" class="quadrant bg-yellow-500 p-6 sm:p-10 rounded-br-lg border-yellow-500 cursor-pointer">
+                    <h3 class="text-xl sm:text-2xl">육성 인재</h3>
+                    <p class="font-normal text-sm sm:text-base mt-2">낮은 능력 & 높은 태도</p>
+                </div>
+            </div>
+            <div class="mt-8 text-center">
+                <button id="show-result-btn" onclick="showResult()" class="btn bg-indigo-600 text-white font-bold py-3 px-8 rounded-lg text-lg hover:bg-indigo-700 hidden">
+                    결과 확인하기
+                </button>
+            </div>
+        </div>
+
+        <!-- 결과 화면 -->
+        <div id="result-screen" class="screen hidden w-full">
+            <div class="text-center mb-6">
+                <h2 class="text-3xl font-bold">진단 결과</h2>
+                <p class="text-gray-600 mt-2">팀원을 위한 맞춤형 피드백 전략입니다.</p>
+            </div>
+
+            <div class="bg-gray-100 rounded-lg p-6">
+                <div class="flex flex-col sm:flex-row items-center gap-6">
+                    <div id="result-disc-icon" class="w-24 h-24 rounded-full flex items-center justify-center text-white text-5xl font-bold">D</div>
+                    <div class="text-center sm:text-left">
+                        <h3 class="text-2xl font-bold" id="result-disc-type">주도형 (Dominance)</h3>
+                        <p class="text-lg text-gray-700" id="result-matrix-type">스타 플레이어 (높은 능력 & 높은 태도)</p>
+                    </div>
+                </div>
+                
+                <div class="mt-6">
+                    <h4 class="text-xl font-semibold mb-2">💡 이런 특성을 가지고 있어요</h4>
+                    <p id="result-characteristics" class="text-gray-700"></p>
+                </div>
+
+                <div class="mt-6">
+                    <h4 class="text-xl font-semibold mb-2">⭐ 효과적인 피드백 전략</h4>
+                    <p id="result-strategy" class="text-gray-700 whitespace-pre-line"></p>
+                </div>
+            </div>
+
+            <div class="mt-8 text-center">
+                <button onclick="resetGame()" class="btn bg-indigo-600 text-white font-bold py-3 px-8 rounded-lg text-lg hover:bg-indigo-700">
+                    처음부터 다시하기
+                </button>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // --- 데이터 영역 ---
+
+        const quizQuestions = [
+            {
+                question: "새로운 프로젝트가 주어졌을 때, 팀원의 반응은?",
+                answers: [
+                    { text: "결과부터 생각하고 빠르게 실행 계획을 세운다.", type: "D" },
+                    { text: "팀원들을 설득하고 긍정적인 분위기를 만든다.", type: "I" },
+                    { text: "팀원들의 의견을 듣고 안정적인 협업을 중요시한다.", type: "S" },
+                    { text: "꼼꼼하게 자료를 분석하고 체계적인 절차를 만든다.", type: "C" }
+                ]
+            },
+            {
+                question: "업무 중 갈등 상황이 발생했을 때, 어떻게 행동하나요?",
+                answers: [
+                    { text: "문제 해결에 초점을 맞추고 직접적으로 의견을 말한다.", type: "D" },
+                    { text: "대화를 통해 관계를 회복하고 분위기를 풀려고 노력한다.", type: "I" },
+                    { text: "상황이 진정될 때까지 기다리며 다른 사람들을 돕는다.", type: "S" },
+                    { text: "원인이 무엇인지 논리적으로 분석하고 원칙에 따라 해결한다.", type: "C" }
+                ]
+            },
+            {
+                question: "피드백을 받을 때, 어떤 방식을 더 편안하게 느끼나요?",
+                answers: [
+                    { text: "핵심만 간결하게, 사실 기반으로 이야기하는 것.", type: "D" },
+                    { text: "칭찬과 격려를 통해 긍정적인 분위기에서 듣는 것.", type: "I" },
+                    { text: "부드럽고 우호적인 분위기에서 개인적으로 듣는 것.", type: "S" },
+                    { text: "정확한 데이터와 구체적인 사례를 들어 설명해주는 것.", type: "C" }
+                ]
+            },
+             {
+                question: "업무를 처리할 때 중요하게 생각하는 것은?",
+                answers: [
+                    { text: "신속한 결과 도출과 목표 달성", type: "D" },
+                    { text: "사람들과의 긍정적인 상호작용과 영향력", type: "I" },
+                    { text: "안정적인 프로세스와 팀의 조화", type: "S" },
+                    { text: "정확성, 품질, 그리고 완벽한 절차", type: "C" }
+                ]
+            }
+        ];
+
+        const feedbackData = {
+            D: {
+                name: "주도형 (Dominance)",
+                icon: "D",
+                color: "bg-red-500",
+                characteristics: "결과 중심적이고, 직접적이며, 결단력이 있습니다. 도전을 즐기고 목표 달성을 중요하게 생각합니다.",
+                strategies: {
+                    star: "성과를 구체적으로 칭찬하고 더 큰 자율성과 리더십 기회를 주세요. '이번 분기 매출 목표 초과 달성은 X에 대한 OOO님의 빠른 판단 덕분이었습니다. 다음 신규 프로젝트 리딩을 맡아보는 건 어떠신가요?' 와 같이 이야기해보세요.",
+                    problem: "태도가 팀에 미치는 영향을 감정 배제하고 사실 기반으로 설명하세요. 통제력을 잃는다는 느낌을 주지 않도록, 해결책을 '함께' 모색하는 방식으로 접근하는 것이 중요합니다. 'OOO님의 능력은 모두가 인정하지만, 최근 회의에서의 발언이 팀 사기를 떨어뜨린다는 의견이 있습니다. 혹시 어려운 점이 있는지, 우리가 함께 개선할 부분이 있을지 이야기 나누고 싶습니다.'",
+                    trainee: "명확하고 간결한 목표와 지시를 제공하세요. 작은 성공에도 결과 중심으로 즉시 칭찬하여 성취감을 느끼게 하는 것이 중요합니다. '요청한 보고서의 핵심 내용이 명확해서 좋았습니다. 다음엔 이 부분을 조금 더 보완해보면 완벽할 것 같습니다.'",
+                    urgent: "개선해야 할 점과 그로 인한 결과를 숨김없이 명확하게 전달해야 합니다. 감정적인 호소보다는 구체적인 행동 계획(PIP)과 기한을 제시하고 선택권을 주는 방식이 효과적입니다."
+                }
+            },
+            I: {
+                name: "사교형 (Influence)",
+                icon: "I",
+                color: "bg-yellow-500",
+                characteristics: "열정적이고 낙관적이며, 사람들과의 관계를 중요시합니다. 사회적 인정을 통해 동기부여를 받습니다.",
+                strategies: {
+                    star: "팀 전체 앞에서 공개적으로 칭찬하여 사회적 인정을 채워주세요. 'OOO님 덕분에 팀 분위기가 항상 밝고 활기찹니다. 특히 이번 워크숍 아이디어는 정말 최고였어요!' 와 같이 열정과 영향력을 인정해주세요.",
+                    problem: "교정 피드백은 반드시 비공개적인 자리에서, 부드러운 분위기로 시작하세요. 사회적으로 거부당한다는 느낌을 받지 않도록, 그의 장점을 먼저 인정하고 개선점을 이야기하는 '샌드위치 피드백'이 효과적입니다. '항상 팀에 긍정적인 에너지를 줘서 고마워요. 다만, 최근 업무 마감 기한을 놓치는 일이 있어 이 부분만 신경 써주면 더욱 신뢰받는 팀원이 될 거예요.'",
+                    trainee: "긍정적인 지지와 격려가 가장 중요합니다. 딱딱한 지시보다는 멘토-멘티 관계처럼 우호적인 관계를 형성하고, 그의 의견을 경청하며 성장할 수 있도록 지원해주세요.",
+                    urgent: "팀과의 관계, 긍정적인 영향력 회복에 초점을 맞춰 대화하세요. '최근 OOO님의 모습이 팀에 좋지 않은 영향을 주고 있어 안타깝습니다. 예전의 긍정적인 모습을 되찾기 위해 어떤 도움이 필요할까요?' 와 같이 접근해보세요."
+                }
+            },
+            S: {
+                name: "안정형 (Steadiness)",
+                icon: "S",
+                color: "bg-green-500",
+                characteristics: "차분하고 인내심이 많으며, 협력적인 관계를 중요시합니다. 안정적인 환경에서 일하는 것을 선호합니다.",
+                strategies: {
+                    star: "팀에 대한 그의 꾸준한 헌신과 노력을 진심으로 인정해주세요. 'OOO님이 묵묵히 팀원들을 챙겨준 덕분에 우리 팀이 안정적으로 운영될 수 있었습니다. 정말 고맙습니다.' 와 같이 그의 기여를 구체적으로 언급해주는 것이 좋습니다.",
+                    problem: "급작스러운 변화나 불안정한 상황이 원인일 수 있습니다. 안전하고 편안한 분위기에서 1:1로 대화하며 그의 이야기를 충분히 들어주세요. '최근에 힘든 일은 없으신가요? OOO님의 표정이 어두워 보여 걱정됩니다.' 와 같이 조심스럽게 다가가는 것이 중요합니다.",
+                    trainee: "구체적이고 단계적인 지침을 차분하게 제공하세요. 실수를 두려워하지 않도록 심리적 안정감을 주고, 과정을 꾸준히 지지하고 격려하는 것이 핵심입니다.",
+                    urgent: "상황의 심각성을 전달하되, 공격적으로 느끼지 않도록 주의해야 합니다. 안정감을 주면서도, 명확한 가이드라인과 개선 계획을 함께 세우고 주기적으로 지원하며 변화를 유도해야 합니다."
+                }
+            },
+            C: {
+                name: "신중형 (Conscientiousness)",
+                icon: "C",
+                color: "bg-blue-500",
+                characteristics: "분석적이고 정확하며, 체계적인 것을 중요시합니다. 논리와 데이터를 기반으로 의사결정하는 것을 선호합니다.",
+                strategies: {
+                    star: "그의 꼼꼼함과 분석력이 프로젝트 성공에 어떻게 기여했는지 구체적인 데이터와 함께 칭찬해주세요. 'OOO님이 분석해준 데이터 덕분에 우리가 놓칠 뻔했던 리스크를 미리 발견하고 대비할 수 있었습니다. 정말 정확한 분석이었습니다.' 와 같이 전문성을 인정해주세요.",
+                    problem: "객관적인 데이터와 사실에 근거하여 문제점을 설명해야 합니다. 감정적인 비판은 절대 금물입니다. '보고서의 데이터 정확성은 매우 높지만, 제출 기한이 3일 지연되어 다음 프로세스에 영향을 미쳤습니다. 원인이 무엇인지, 시간을 단축할 방법은 없을지 함께 검토해봅시다.'",
+                    trainee: "명확하고 체계적인 업무 매뉴얼이나 가이드라인을 제공하는 것이 가장 효과적입니다. 왜 이 업무를 해야 하는지에 대한 논리적인 설명과 함께, 질문할 수 있는 시간을 충분히 주세요.",
+                    urgent: "개선이 필요한 부분에 대한 명확한 기준과 데이터를 제시해야 합니다. 원칙과 절차를 중요시하므로, 개선 계획(PIP) 역시 논리적이고 체계적으로 수립하여 제시하는 것이 설득력을 높입니다."
+                }
+            }
+        };
+
+        // --- 상태 관리 변수 ---
+        let currentScreen = 'start-screen';
+        let currentQuestionIndex = 0;
+        let discScores = { D: 0, I: 0, S: 0, C: 0 };
+        let finalDiscType = '';
+        let selectedQuadrant = '';
+
+        // --- 화면 전환 함수 ---
+        function showScreen(screenId) {
+            document.querySelectorAll('.screen').forEach(screen => {
+                screen.classList.add('hidden');
+            });
+            const targetScreen = document.getElementById(screenId);
+            if (targetScreen) {
+                targetScreen.classList.remove('hidden');
+                // 강제 리플로우로 애니메이션 트리거
+                void targetScreen.offsetWidth;
+            }
+            currentScreen = screenId;
+        }
+
+        // --- 게임 로직 함수 ---
+        function startGame() {
+            resetGame();
+            showScreen('disc-quiz-screen');
+            displayQuestion();
+        }
+        
+        function displayQuestion() {
+            const quizContainer = document.getElementById('quiz-container');
+            if (currentQuestionIndex < quizQuestions.length) {
+                const questionData = quizQuestions[currentQuestionIndex];
+                let answersHtml = questionData.answers.map((answer, index) => `
+                    <div class="mb-4">
+                        <label class="block w-full text-left p-4 border-2 border-gray-200 rounded-lg cursor-pointer hover:bg-indigo-50 hover:border-indigo-300 transition-all">
+                            <input type="radio" name="answer" value="${answer.type}" class="mr-3">
+                            <span>${answer.text}</span>
+                        </label>
+                    </div>
+                `).join('');
+
+                quizContainer.innerHTML = `
+                    <h3 class="text-xl sm:text-2xl font-semibold mb-6 text-center">${currentQuestionIndex + 1}. ${questionData.question}</h3>
+                    <div class="max-w-2xl mx-auto">${answersHtml}</div>
+                `;
+                
+                // 라디오 버튼 이벤트 리스너 추가
+                document.querySelectorAll('input[name="answer"]').forEach(radio => {
+                    radio.addEventListener('change', () => {
+                        document.getElementById('next-question-btn').disabled = false;
+                        document.getElementById('next-question-btn').classList.remove('bg-gray-300', 'text-gray-500', 'cursor-not-allowed');
+                        document.getElementById('next-question-btn').classList.add('bg-indigo-600', 'text-white');
+                    });
+                });
+
+                updateProgressBar();
+            }
+        }
+
+        function updateProgressBar() {
+            const progress = ((currentQuestionIndex) / quizQuestions.length) * 100;
+            document.getElementById('progress-bar').style.width = `${progress}%`;
+        }
+        
+        function nextQuestion() {
+            const selectedAnswer = document.querySelector('input[name="answer"]:checked');
+            if (selectedAnswer) {
+                discScores[selectedAnswer.value]++;
+                currentQuestionIndex++;
+                if (currentQuestionIndex < quizQuestions.length) {
+                    displayQuestion();
+                    const nextBtn = document.getElementById('next-question-btn');
+                    nextBtn.disabled = true;
+                    nextBtn.classList.add('bg-gray-300', 'text-gray-500', 'cursor-not-allowed');
+                    nextBtn.classList.remove('bg-indigo-600', 'text-white');
+                } else {
+                    calculateDiscResult();
+                    showScreen('matrix-screen');
+                }
+            }
+        }
+
+        function calculateDiscResult() {
+            finalDiscType = Object.keys(discScores).reduce((a, b) => discScores[a] > discScores[b] ? a : b);
+        }
+
+        function selectQuadrant(quadrant) {
+            selectedQuadrant = quadrant;
+            document.querySelectorAll('.quadrant').forEach(q => {
+                q.classList.remove('selected-quadrant', 'border-white', 'scale-105', 'z-10');
+                // 원래 테두리 색상 복원
+                const originalBgColor = Array.from(q.classList).find(c => c.startsWith('bg-')).replace('bg-', 'border-');
+                 q.classList.add(originalBgColor);
+            });
+            const selectedEl = document.getElementById(`quadrant-${quadrant}`);
+            selectedEl.classList.add('selected-quadrant', 'border-white', 'scale-105', 'z-10');
+            selectedEl.classList.remove(Array.from(selectedEl.classList).find(c => c.startsWith('border-') && c !== 'border-white'));
+
+            document.getElementById('show-result-btn').classList.remove('hidden');
+        }
+
+        function showResult() {
+            if (!finalDiscType || !selectedQuadrant) return;
+            
+            const discInfo = feedbackData[finalDiscType];
+            const strategy = discInfo.strategies[selectedQuadrant];
+
+            document.getElementById('result-disc-icon').className = `w-24 h-24 rounded-full flex items-center justify-center text-white text-5xl font-bold ${discInfo.color}`;
+            document.getElementById('result-disc-icon').innerText = discInfo.icon;
+            document.getElementById('result-disc-type').innerText = discInfo.name;
+            document.getElementById('result-characteristics').innerText = discInfo.characteristics;
+            document.getElementById('result-strategy').innerText = strategy;
+            
+            const matrixTypeMap = {
+                star: '스타 플레이어 (높은 능력 & 높은 태도)',
+                problem: '잠재적 문제 (높은 능력 & 낮은 태도)',
+                trainee: '육성 인재 (낮은 능력 & 높은 태도)',
+                urgent: '개선 시급 (낮은 능력 & 낮은 태도)'
+            };
+            document.getElementById('result-matrix-type').innerText = matrixTypeMap[selectedQuadrant];
+            
+            showScreen('result-screen');
+        }
+        
+        function resetGame() {
+            currentQuestionIndex = 0;
+            discScores = { D: 0, I: 0, S: 0, C: 0 };
+            finalDiscType = '';
+            selectedQuadrant = '';
+            
+            document.querySelectorAll('.quadrant').forEach(q => {
+                q.classList.remove('selected-quadrant', 'border-white');
+            });
+            document.getElementById('show-result-btn').classList.add('hidden');
+            updateProgressBar();
+            showScreen('start-screen');
+        }
+    </script>
+</body>
+</html>
